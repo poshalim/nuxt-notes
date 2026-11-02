@@ -1,28 +1,13 @@
 <script setup lang="ts">
-import { useNotesStore } from '~/entities/note'
-import { useDialog } from '~/features/confirm-dialog'
-import { TodoItemRow, useEditorStore } from '~/features/edit-note'
-import { formatDate, useToast, useUndoHotkeys } from '~/shared/lib'
+import { computed } from 'vue'
+import { useHead } from '#imports'
+import { TodoItemRow } from '~/features/edit-note'
 import { AppBanner, BaseButton, EmptyState } from '~/shared/ui'
+import { useNoteEditorFlows } from '../model/useNoteEditorFlows'
+import { useRowFocus } from '../model/useRowFocus'
 
-const route = useRoute()
-const router = useRouter()
-const editor = useEditorStore()
-const dialog = useDialog()
-const toast = useToast()
-
-const routeId = computed(() => String(route.params.id))
-const status = ref<'loading' | 'ready' | 'not-found'>('loading')
-/** Skips the unsaved-changes guard for navigations the page starts itself. */
-let leaving = false
-
-const titleInput = ref<HTMLInputElement | null>(null)
-const rows = new Map<string, { focus: () => void }>()
-
-function setRowRef(id: string, el: unknown) {
-  if (el) rows.set(id, el as { focus: () => void })
-  else rows.delete(id)
-}
+const { setRowRef, focusRow, addItemAt, onTitleKeydown, onRemoveEmpty, onNavigate } = useRowFocus()
+const { editor, status, save, remove, cancel, loadLatest } = useNoteEditorFlows({ focusTitle: () => focusRow() })
 
 const doneCount = computed(() => editor.content.todos.filter(item => item.done).length)
 const statusText = computed(() => {
@@ -36,227 +21,6 @@ useHead({
     if (editor.isNew) return 'Новая заметка'
     return editor.content.title || 'Без названия'
   },
-})
-
-async function focusRow(id: string | undefined) {
-  await nextTick()
-  if (id) rows.get(id)?.focus()
-  else titleInput.value?.focus()
-}
-
-async function offerDraft() {
-  const draft = editor.findDraft()
-  if (!draft) return
-  const choice = await dialog.choose({
-    title: 'Восстановить несохранённые изменения?',
-    message: `Найдены изменения от ${formatDate(draft.savedAt)}, которые не были сохранены.`,
-    actions: [
-      { id: 'discard', label: 'Отбросить' },
-      { id: 'restore', label: 'Восстановить', variant: 'primary', autofocus: true },
-    ],
-  })
-  if (choice === 'restore') editor.restoreDraft(draft)
-  else if (choice === 'discard') editor.discardDraft()
-}
-
-async function init() {
-  const id = routeId.value === 'new' ? null : routeId.value
-  // A new note has just been saved and the URL updated: keep the current session.
-  if (id !== null && editor.active && editor.noteId === id) {
-    status.value = 'ready'
-    return
-  }
-  if (editor.active) editor.close()
-  const draft = typeof route.query.draft === 'string' ? route.query.draft : undefined
-  if (editor.open(id, { draft }) === 'not-found') {
-    status.value = 'not-found'
-    return
-  }
-  status.value = 'ready'
-  await offerDraft()
-  if (editor.isNew) focusRow(undefined)
-}
-
-watch(routeId, init, { immediate: true })
-
-function addItemAt(index: number) {
-  focusRow(editor.addItem(index))
-}
-
-function onTitleKeydown(event: KeyboardEvent) {
-  if (event.key !== 'Enter' || event.isComposing) return
-  event.preventDefault()
-  const first = editor.content.todos[0]
-  if (first) focusRow(first.id)
-  else addItemAt(0)
-}
-
-function onRemoveEmpty(index: number) {
-  const previous = editor.content.todos[index - 1]
-  editor.removeItem(editor.content.todos[index]!.id)
-  focusRow(previous?.id)
-}
-
-function onNavigate(index: number, direction: -1 | 1) {
-  const target = editor.content.todos[index + direction]
-  if (target) focusRow(target.id)
-  else if (direction === -1) focusRow(undefined)
-}
-
-async function leaveTo(path: string) {
-  leaving = true
-  try {
-    await router.push(path)
-  }
-  finally {
-    leaving = false
-  }
-}
-
-async function onSave(options: { force?: boolean, asNew?: boolean } = {}) {
-  const wasNew = editor.isNew
-  const result = editor.save(options)
-  switch (result.status) {
-    case 'saved':
-      toast.show('Заметка сохранена', 'success')
-      if (wasNew || options.asNew) {
-        leaving = true
-        await router.replace(`/notes/${result.id}`)
-        leaving = false
-      }
-      break
-    case 'empty':
-      toast.show('Добавьте название или хотя бы один пункт', 'error')
-      focusRow(undefined)
-      break
-    case 'conflict':
-      await resolveConflict()
-      break
-    case 'deleted':
-      await promptRemoved()
-      break
-  }
-}
-
-async function loadLatest() {
-  if (editor.isDirty) {
-    const confirmed = await dialog.confirm({
-      title: 'Загрузить актуальную версию?',
-      message: 'Ваши несохранённые изменения будут потеряны.',
-      confirmLabel: 'Загрузить',
-      danger: true,
-    })
-    if (!confirmed) return
-  }
-  editor.discardDraft()
-  editor.open(editor.noteId)
-}
-
-async function resolveConflict() {
-  const choice = await dialog.choose({
-    title: 'Заметка изменена в другой вкладке',
-    message: 'Пока вы редактировали, эту заметку сохранили в другом месте. Какую версию оставить?',
-    actions: [
-      { id: 'cancel', label: 'Отмена', autofocus: true },
-      { id: 'theirs', label: 'Загрузить их версию' },
-      { id: 'mine', label: 'Перезаписать моей', variant: 'danger' },
-    ],
-  })
-  if (choice === 'mine') await onSave({ force: true })
-  else if (choice === 'theirs') {
-    editor.discardDraft()
-    editor.open(editor.noteId)
-  }
-}
-
-let removedPromptOpen = false
-
-async function promptRemoved() {
-  if (removedPromptOpen) return
-  removedPromptOpen = true
-  const choice = await dialog.choose({
-    title: 'Заметка удалена',
-    message: 'Эту заметку удалили в другой вкладке. Вы можете сохранить свою версию как новую заметку.',
-    actions: [
-      { id: 'leave', label: 'Закрыть без сохранения' },
-      { id: 'save', label: 'Сохранить как новую', variant: 'primary', autofocus: true },
-    ],
-  })
-  removedPromptOpen = false
-  if (choice === 'save') await onSave({ asNew: true })
-  else if (choice === 'leave') await leaveTo('/')
-}
-
-watch(() => editor.isRemovedExternally, (removed) => {
-  if (removed && !leaving) promptRemoved()
-})
-
-async function onDelete() {
-  const confirmed = await dialog.confirm({
-    title: 'Удалить заметку?',
-    message: `«${editor.content.title || 'Без названия'}» будет удалена без возможности восстановления.`,
-    confirmLabel: 'Удалить',
-    danger: true,
-  })
-  if (!confirmed || editor.noteId === null) return
-  leaving = true
-  useNotesStore().remove(editor.noteId)
-  editor.close()
-  toast.show('Заметка удалена')
-  await router.push('/')
-  leaving = false
-}
-
-/** The unsaved-changes guard below asks for confirmation when needed. */
-function onCancel() {
-  router.push('/')
-}
-
-onBeforeRouteLeave(async () => {
-  if (leaving || !editor.active || !editor.isDirty) return true
-  const confirmed = await dialog.confirm({
-    title: 'Отменить редактирование?',
-    message: 'Несохранённые изменения будут потеряны.',
-    confirmLabel: 'Отменить изменения',
-    cancelLabel: 'Продолжить',
-    danger: true,
-  })
-  if (confirmed) editor.cancel()
-  return confirmed
-})
-
-useUndoHotkeys({
-  undo: () => editor.undo(),
-  redo: () => editor.redo(),
-  enabled: () => status.value === 'ready' && !dialog.isOpen.value,
-})
-
-function onKeydown(event: KeyboardEvent) {
-  if ((event.ctrlKey || event.metaKey) && event.code === 'KeyS' && !dialog.isOpen.value) {
-    event.preventDefault()
-    if (status.value === 'ready') onSave()
-  }
-}
-
-function onPageHide() {
-  editor.flushDraft()
-}
-
-function onVisibilityChange() {
-  if (document.visibilityState === 'hidden') editor.flushDraft()
-}
-
-onMounted(() => {
-  window.addEventListener('keydown', onKeydown)
-  window.addEventListener('pagehide', onPageHide)
-  document.addEventListener('visibilitychange', onVisibilityChange)
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('keydown', onKeydown)
-  window.removeEventListener('pagehide', onPageHide)
-  document.removeEventListener('visibilitychange', onVisibilityChange)
-  editor.close()
 })
 </script>
 
@@ -273,7 +37,7 @@ onBeforeUnmount(() => {
       </BaseButton>
     </EmptyState>
 
-    <form v-else-if="status === 'ready'" class="editor" novalidate @submit.prevent="onSave()">
+    <form v-else-if="status === 'ready'" class="editor" novalidate @submit.prevent="save()">
       <div class="editor__toolbar">
         <BaseButton to="/" variant="ghost" icon="arrow-left" compact>
           Все заметки
@@ -300,10 +64,10 @@ onBeforeUnmount(() => {
           {{ statusText }}
         </span>
         <div class="editor__actions">
-          <BaseButton v-if="!editor.isNew" variant="ghost" icon="trash" compact @click="onDelete">
+          <BaseButton v-if="!editor.isNew" variant="ghost" icon="trash" compact @click="remove">
             Удалить
           </BaseButton>
-          <BaseButton @click="onCancel">
+          <BaseButton @click="cancel">
             Отмена
           </BaseButton>
           <BaseButton
@@ -321,7 +85,7 @@ onBeforeUnmount(() => {
       <AppBanner v-if="editor.isRemovedExternally" class="editor__banner">
         Эту заметку удалили в другой вкладке.
         <template #actions>
-          <BaseButton size="sm" variant="primary" @click="onSave({ asNew: true })">
+          <BaseButton size="sm" variant="primary" @click="save({ asNew: true })">
             Сохранить как новую
           </BaseButton>
         </template>
