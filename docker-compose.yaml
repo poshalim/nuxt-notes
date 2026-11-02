@@ -1,0 +1,7 @@
+services:
+  app:
+    build: .
+    image: nuxt-notes
+    ports:
+      - "${PORT:-8080}:80"
+    restart: unless-stopped
