@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
+  backupRaw,
   draftKey,
   listDraftIds,
   loadDraft,
   loadNotes,
   NOTES_KEY,
+  readNotes,
   removeDraft,
   saveDraft,
   saveNotes,
@@ -29,17 +31,24 @@ describe('storage', () => {
     expect(loadNotes(localStorage)).toEqual([note])
   })
 
-  it('returns no notes for missing, corrupted or unknown future data', () => {
-    expect(loadNotes(localStorage)).toEqual([])
-    localStorage.setItem(NOTES_KEY, '{not json')
-    expect(loadNotes(localStorage)).toEqual([])
-    localStorage.setItem(NOTES_KEY, JSON.stringify({ version: SCHEMA_VERSION + 1, notes: [note] }))
-    expect(loadNotes(localStorage)).toEqual([])
+  it('reports missing, corrupted and unknown future data', () => {
+    expect(readNotes(null)).toEqual({ notes: [], status: 'ok' })
+    expect(readNotes('{not json')).toEqual({ notes: [], status: 'corrupted' })
+    expect(readNotes('[]')).toEqual({ notes: [], status: 'corrupted' })
+    expect(readNotes(JSON.stringify({ version: SCHEMA_VERSION + 1, notes: [note] })))
+      .toEqual({ notes: [], status: 'unsupported-version' })
   })
 
-  it('skips malformed notes', () => {
-    localStorage.setItem(NOTES_KEY, JSON.stringify({ version: SCHEMA_VERSION, notes: [note, { id: 1 }] }))
-    expect(loadNotes(localStorage)).toEqual([note])
+  it('skips malformed notes and reports them', () => {
+    const raw = JSON.stringify({ version: SCHEMA_VERSION, notes: [note, { id: 1 }] })
+    expect(readNotes(raw)).toEqual({ notes: [note], status: 'corrupted' })
+  })
+
+  it('backs up a raw value once', () => {
+    const key = backupRaw(localStorage, '{broken')
+    expect(key).not.toBeNull()
+    expect(localStorage.getItem(key!)).toBe('{broken')
+    expect(backupRaw(localStorage, '{broken')).toBe(key)
   })
 
   it('stores drafts per note and lists them', () => {

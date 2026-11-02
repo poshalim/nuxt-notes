@@ -1,7 +1,7 @@
 export type { Note, NoteContent, TodoItem } from './model/types'
 export { cloneContent, cloneTodo, contentEquals, emptyContent, isContentEmpty, normalizeContent } from './model/content'
 export { applyOp, invertOp, type NoteOp } from './model/ops'
-export { PERSIST_DELAY, useNotesStore } from './model/store'
+export { PERSIST_DELAY, useNotesStore, type StorageIssue } from './model/store'
 export {
   draftKey,
   getStorage,

@@ -23,6 +23,18 @@ onMounted(() => {
 })
 onBeforeUnmount(() => window.removeEventListener('storage', refreshDrafts))
 
+const storageIssueText = computed(() => {
+  const issue = notesStore.storageIssue
+  if (!issue) return null
+  const reason = issue.status === 'unsupported-version'
+    ? 'Сохранённые данные созданы более новой версией приложения и не загружены.'
+    : 'Часть сохранённых данных повреждена и не загружена.'
+  const backup = issue.backupKey
+    ? `Исходные данные сохранены в localStorage под ключом «${issue.backupKey}».`
+    : 'Резервную копию создать не удалось, поэтому изменения не сохраняются.'
+  return `${reason} ${backup}`
+})
+
 const hasNewDraft = computed(() => draftIds.value.has(NEW_NOTE_DRAFT_ID))
 
 async function onDelete(note: Note) {
@@ -54,6 +66,19 @@ async function onDelete(note: Note) {
         Новая заметка
       </BaseButton>
     </div>
+
+    <AppBanner v-if="storageIssueText" class="home__banner">
+      {{ storageIssueText }}
+      <template #actions>
+        <BaseButton size="sm" @click="notesStore.dismissStorageIssue()">
+          Понятно
+        </BaseButton>
+      </template>
+    </AppBanner>
+
+    <AppBanner v-else-if="notesStore.persistFailed" class="home__banner">
+      Не удалось сохранить изменения: хранилище браузера недоступно или переполнено.
+    </AppBanner>
 
     <AppBanner v-if="hasNewDraft" variant="info" class="home__banner">
       У вас есть несохранённая новая заметка.

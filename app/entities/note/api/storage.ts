@@ -6,6 +6,15 @@ export const SCHEMA_VERSION = 1
 export const NOTES_KEY = 'nuxt-notes:notes'
 export const DRAFT_KEY_PREFIX = 'nuxt-notes:draft:'
 export const NEW_NOTE_DRAFT_ID = 'new'
+export const BACKUP_KEY_PREFIX = 'nuxt-notes:backup:'
+
+/** `ok` also covers missing data; the other statuses mean the stored value could not be fully read. */
+export type NotesReadStatus = 'ok' | 'corrupted' | 'unsupported-version'
+
+export interface NotesReadResult {
+  notes: Note[]
+  status: NotesReadStatus
+}
 
 export interface PersistedNotes {
   version: number
@@ -90,9 +99,9 @@ function readJson(storage: Storage, key: string): Record<string, unknown> | null
   }
 }
 
-function writeJson(storage: Storage, key: string, value: unknown): boolean {
+function writeRaw(storage: Storage, key: string, value: string): boolean {
   try {
-    storage.setItem(key, JSON.stringify(value))
+    storage.setItem(key, value)
     return true
   }
   catch (error) {
@@ -101,23 +110,51 @@ function writeJson(storage: Storage, key: string, value: unknown): boolean {
   }
 }
 
-export function parseNotes(raw: string | null): Note[] {
-  if (raw === null) return []
+function writeJson(storage: Storage, key: string, value: unknown): boolean {
+  return writeRaw(storage, key, JSON.stringify(value))
+}
+
+export function readNotes(raw: string | null): NotesReadResult {
+  if (raw === null) return { notes: [], status: 'ok' }
   let parsed: unknown
   try {
     parsed = JSON.parse(raw)
   }
   catch {
-    return []
+    return { notes: [], status: 'corrupted' }
   }
-  if (!isRecord(parsed)) return []
+  if (!isRecord(parsed)) return { notes: [], status: 'corrupted' }
+  if (typeof parsed.version === 'number' && parsed.version > SCHEMA_VERSION) {
+    return { notes: [], status: 'unsupported-version' }
+  }
   const data = migrate(parsed)
-  if (!data || !Array.isArray(data.notes)) return []
-  return data.notes.filter(isNote)
+  if (!data || !Array.isArray(data.notes)) return { notes: [], status: 'corrupted' }
+  const notes = data.notes.filter(isNote)
+  return { notes, status: notes.length === data.notes.length ? 'ok' : 'corrupted' }
 }
 
 export function loadNotes(storage: Storage): Note[] {
-  return parseNotes(storage.getItem(NOTES_KEY))
+  return readNotes(storage.getItem(NOTES_KEY)).notes
+}
+
+function listKeys(storage: Storage, prefix: string): string[] {
+  const keys: string[] = []
+  for (let i = 0; i < storage.length; i++) {
+    const key = storage.key(i)
+    if (key?.startsWith(prefix)) keys.push(key)
+  }
+  return keys
+}
+
+/**
+ * Copies an unreadable stored value to a separate key, so overwriting the notes never loses it.
+ * Returns the backup key, or `null` if the backup could not be written.
+ */
+export function backupRaw(storage: Storage, raw: string): string | null {
+  const existing = listKeys(storage, BACKUP_KEY_PREFIX).find(key => storage.getItem(key) === raw)
+  if (existing) return existing
+  const key = BACKUP_KEY_PREFIX + Date.now()
+  return writeRaw(storage, key, raw) ? key : null
 }
 
 export function saveNotes(storage: Storage, notes: Note[]): boolean {
@@ -154,10 +191,5 @@ export function removeDraft(storage: Storage, noteId: string | null): void {
 }
 
 export function listDraftIds(storage: Storage): string[] {
-  const ids: string[] = []
-  for (let i = 0; i < storage.length; i++) {
-    const key = storage.key(i)
-    if (key?.startsWith(DRAFT_KEY_PREFIX)) ids.push(key.slice(DRAFT_KEY_PREFIX.length))
-  }
-  return ids
+  return listKeys(storage, DRAFT_KEY_PREFIX).map(key => key.slice(DRAFT_KEY_PREFIX.length))
 }

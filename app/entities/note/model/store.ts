@@ -2,16 +2,23 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { createId } from '~/shared/lib'
 import { cloneContent } from './content'
-import { getStorage, loadNotes, NOTES_KEY, parseNotes, removeDraft, saveNotes } from '../api/storage'
+import { backupRaw, getStorage, NOTES_KEY, readNotes, removeDraft, saveNotes, type NotesReadStatus } from '../api/storage'
 import type { Note, NoteContent } from './types'
 
 /** Writes to storage are batched: at most one write per this interval. */
 export const PERSIST_DELAY = 300
 
+export interface StorageIssue {
+  status: Exclude<NotesReadStatus, 'ok'>
+  /** Key the unreadable value was copied to, `null` if the copy failed. */
+  backupKey: string | null
+}
+
 export const useNotesStore = defineStore('notes', () => {
   const notes = ref<Note[]>([])
   const hydrated = ref(false)
   const persistFailed = ref(false)
+  const storageIssue = ref<StorageIssue | null>(null)
 
   /** Local changes not yet written to storage: `null` marks a deletion. */
   const pendingChanges = new Map<string, Note | null>()
@@ -27,9 +34,21 @@ export const useNotesStore = defineStore('notes', () => {
     return lastTimestamp
   }
 
+  /**
+   * Reads the stored notes. An unreadable value is backed up first; `safe` is `false`
+   * when that failed, so the value must not be overwritten.
+   */
+  function readStored(storage: Storage, raw = storage.getItem(NOTES_KEY)): { notes: Note[], safe: boolean } {
+    const result = readNotes(raw)
+    if (result.status === 'ok' || raw === null) return { notes: result.notes, safe: true }
+    const backupKey = backupRaw(storage, raw)
+    storageIssue.value = { status: result.status, backupKey }
+    return { notes: result.notes, safe: backupKey !== null }
+  }
+
   function hydrate(): void {
     const storage = getStorage()
-    notes.value = storage ? loadNotes(storage) : []
+    notes.value = storage ? readStored(storage).notes : []
     hydrated.value = true
   }
 
@@ -56,8 +75,12 @@ export const useNotesStore = defineStore('notes', () => {
     const storage = getStorage()
     if (!storage) return
     // Merge with what other tabs may have written since our last read.
-    const merged = overlayPending(loadNotes(storage))
-    persistFailed.value = !saveNotes(storage, merged)
+    const stored = readStored(storage)
+    if (!stored.safe) {
+      persistFailed.value = true
+      return
+    }
+    persistFailed.value = !saveNotes(storage, overlayPending(stored.notes))
     if (!persistFailed.value) pendingChanges.clear()
   }
 
@@ -104,7 +127,18 @@ export const useNotesStore = defineStore('notes', () => {
 
   /** Applies a change made by another tab, keeping local changes that are not flushed yet. */
   function applyExternal(raw: string | null): void {
-    notes.value = overlayPending(parseNotes(raw))
+    const result = readNotes(raw)
+    if (result.status !== 'ok') {
+      // Keep what is shown; the unreadable value is backed up before anything overwrites it.
+      const storage = getStorage()
+      if (storage && raw !== null) readStored(storage, raw)
+      return
+    }
+    notes.value = overlayPending(result.notes)
+  }
+
+  function dismissStorageIssue(): void {
+    storageIssue.value = null
   }
 
   /** Subscribes to cross-tab updates and flushes pending writes when the page is hidden. */
@@ -130,6 +164,7 @@ export const useNotesStore = defineStore('notes', () => {
     notes,
     hydrated,
     persistFailed,
+    storageIssue,
     sortedNotes,
     hydrate,
     getById,
@@ -138,6 +173,7 @@ export const useNotesStore = defineStore('notes', () => {
     remove,
     flush,
     applyExternal,
+    dismissStorageIssue,
     startSync,
   }
 })

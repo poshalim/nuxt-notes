@@ -135,4 +135,53 @@ describe('notes store', () => {
     expect(loadNotes(localStorage)).toHaveLength(1)
     stop()
   })
+
+  describe('unreadable storage', () => {
+    const stored: Note = { id: 'old', ...content, createdAt: 1, updatedAt: 1 }
+    const cases = {
+      'corrupted': '{broken',
+      'unsupported-version': JSON.stringify({ version: 99, notes: [stored] }),
+    } as const
+
+    for (const [status, raw] of Object.entries(cases)) {
+      it(`backs up ${status} data before overwriting it`, () => {
+        localStorage.setItem(NOTES_KEY, raw)
+        const store = useNotesStore()
+        store.hydrate()
+        expect(store.storageIssue?.status).toBe(status)
+        const backupKey = store.storageIssue!.backupKey!
+        expect(localStorage.getItem(backupKey)).toBe(raw)
+
+        store.create(content)
+        store.flush()
+        expect(loadNotes(localStorage)).toHaveLength(1)
+        expect(localStorage.getItem(backupKey)).toBe(raw)
+      })
+    }
+
+    it('does not overwrite data it failed to back up', () => {
+      localStorage.setItem(NOTES_KEY, '{broken')
+      const store = useNotesStore()
+      store.hydrate()
+      store.create(content)
+      const setItem = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+        throw new DOMException('full', 'QuotaExceededError')
+      })
+      localStorage.removeItem(store.storageIssue!.backupKey!)
+      store.flush()
+      setItem.mockRestore()
+      expect(localStorage.getItem(NOTES_KEY)).toBe('{broken')
+      expect(store.persistFailed).toBe(true)
+    })
+
+    it('ignores an unreadable change from another tab', () => {
+      const store = useNotesStore()
+      store.hydrate()
+      store.create(content)
+      store.flush()
+      store.applyExternal('{broken')
+      expect(store.notes).toHaveLength(1)
+      expect(store.storageIssue?.status).toBe('corrupted')
+    })
+  })
 })
