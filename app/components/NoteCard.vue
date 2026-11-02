@@ -94,7 +94,8 @@ const titleText = computed(() => props.note.title || 'Без названия')
     box-shadow: var(--shadow);
   }
 
-  &:focus-within {
+  // Keyboard focus only: focus restored after a mouse-driven dialog must not highlight the card.
+  &:has(:focus-visible) {
     border-color: var(--c-primary);
   }
 

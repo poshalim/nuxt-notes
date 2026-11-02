@@ -98,7 +98,7 @@ onBeforeUnmount(() => {
     flex-direction: column;
     gap: 12px;
     width: 100%;
-    max-width: 460px;
+    max-width: 520px;
     max-height: calc(100vh - 32px);
     max-height: calc(100dvh - 32px);
     overflow: auto;

@@ -26,8 +26,8 @@ function setRowRef(id: string, el: unknown) {
 
 const doneCount = computed(() => editor.content.todos.filter(item => item.done).length)
 const statusText = computed(() => {
-  if (editor.isDirty) return 'Есть несохранённые изменения'
-  return editor.isNew ? 'Новая заметка' : 'Все изменения сохранены'
+  if (editor.isDirty) return 'Не сохранено'
+  return editor.isNew ? 'Новая заметка' : 'Сохранено'
 })
 
 useHead({
@@ -217,7 +217,7 @@ onBeforeRouteLeave(async () => {
     title: 'Отменить редактирование?',
     message: 'Несохранённые изменения будут потеряны.',
     confirmLabel: 'Отменить изменения',
-    cancelLabel: 'Продолжить редактирование',
+    cancelLabel: 'Продолжить',
     danger: true,
   })
   if (confirmed) editor.cancel()
