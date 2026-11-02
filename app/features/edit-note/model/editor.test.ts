@@ -1,6 +1,6 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { loadDraft, useNotesStore } from '~/entities/note'
+import { listDraftIds, loadDraft, NEW_NOTE_DRAFT_PREFIX, useNotesStore } from '~/entities/note'
 import { HISTORY_LIMIT } from '~/shared/lib'
 import { DRAFT_SAVE_DELAY, TEXT_COMMIT_DELAY, useEditorStore } from './editor'
 
@@ -29,6 +29,7 @@ function type(editor: ReturnType<typeof useEditorStore>, value: string, id?: str
 describe('editor store', () => {
   beforeEach(() => {
     localStorage.clear()
+    sessionStorage.clear()
     vi.useFakeTimers()
     setActivePinia(createPinia())
   })
@@ -333,10 +334,45 @@ describe('editor store', () => {
       editor.open(null)
       editor.setTitle('Unsaved')
       editor.flushDraft()
-      expect(loadDraft(localStorage, null)!.content.title).toBe('Unsaved')
+      expect(listDraftIds(localStorage)).toHaveLength(1)
 
       editor.open(null)
       expect(editor.findDraft()!.content.title).toBe('Unsaved')
+    })
+
+    it('keeps new-note drafts of different tabs apart', () => {
+      useNotesStore().hydrate()
+      const first = useEditorStore()
+      first.open(null)
+      first.setTitle('First tab')
+      first.flushDraft()
+      const [firstDraft] = listDraftIds(localStorage)
+
+      sessionStorage.clear()
+      setActivePinia(createPinia())
+      useNotesStore().hydrate()
+      const second = useEditorStore()
+      second.open(null)
+      expect(second.findDraft()).toBeNull()
+      second.setTitle('Second tab')
+      second.flushDraft()
+      expect(listDraftIds(localStorage)).toHaveLength(2)
+
+      second.open(null, { draft: firstDraft!.slice(NEW_NOTE_DRAFT_PREFIX.length) })
+      expect(second.findDraft()!.content.title).toBe('First tab')
+    })
+
+    it('starts a fresh new-note draft after the new note is saved', () => {
+      useNotesStore().hydrate()
+      const editor = useEditorStore()
+      editor.open(null)
+      editor.setTitle('Saved')
+      editor.save()
+      editor.open(null)
+      editor.setTitle('Next')
+      editor.flushDraft()
+      expect(listDraftIds(localStorage)).toHaveLength(1)
+      expect(editor.findDraft()!.content.title).toBe('Next')
     })
 
     it('offers a draft based on an outdated version and then reports a conflict', () => {

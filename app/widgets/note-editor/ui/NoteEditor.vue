@@ -67,7 +67,8 @@ async function init() {
     return
   }
   if (editor.active) editor.close()
-  if (editor.open(id) === 'not-found') {
+  const draft = typeof route.query.draft === 'string' ? route.query.draft : undefined
+  if (editor.open(id, { draft }) === 'not-found') {
     status.value = 'not-found'
     return
   }

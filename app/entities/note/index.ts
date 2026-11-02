@@ -4,10 +4,12 @@ export { applyOp, invertOp, type NoteOp } from './model/ops'
 export { PERSIST_DELAY, useNotesStore, type StorageIssue } from './model/store'
 export {
   draftKey,
+  getSessionStorage,
   getStorage,
   listDraftIds,
   loadDraft,
-  NEW_NOTE_DRAFT_ID,
+  NEW_NOTE_DRAFT_PREFIX,
+  NEW_NOTE_SESSION_KEY,
   removeDraft,
   saveDraft,
   type NoteDraft,

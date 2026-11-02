@@ -5,7 +5,10 @@ import type { Note, NoteContent, TodoItem } from '../model/types'
 export const SCHEMA_VERSION = 1
 export const NOTES_KEY = 'nuxt-notes:notes'
 export const DRAFT_KEY_PREFIX = 'nuxt-notes:draft:'
-export const NEW_NOTE_DRAFT_ID = 'new'
+/** Drafts of not yet saved notes are keyed by this prefix and the id of the tab's edit session. */
+export const NEW_NOTE_DRAFT_PREFIX = 'new:'
+/** sessionStorage key with the id of the new-note session of the current tab. */
+export const NEW_NOTE_SESSION_KEY = 'nuxt-notes:new-note-session'
 export const BACKUP_KEY_PREFIX = 'nuxt-notes:backup:'
 
 /** `ok` also covers missing data; the other statuses mean the stored value could not be fully read. */
@@ -43,6 +46,15 @@ const migrations: Record<number, Migration> = {}
 export function getStorage(): Storage | null {
   try {
     return typeof window === 'undefined' ? null : window.localStorage
+  }
+  catch {
+    return null
+  }
+}
+
+export function getSessionStorage(): Storage | null {
+  try {
+    return typeof window === 'undefined' ? null : window.sessionStorage
   }
   catch {
     return null
@@ -162,12 +174,13 @@ export function saveNotes(storage: Storage, notes: Note[]): boolean {
   return writeJson(storage, NOTES_KEY, data)
 }
 
-export function draftKey(noteId: string | null): string {
-  return DRAFT_KEY_PREFIX + (noteId ?? NEW_NOTE_DRAFT_ID)
+/** `draftId` is the note id, or `NEW_NOTE_DRAFT_PREFIX` + session id for a note that is not saved yet. */
+export function draftKey(draftId: string): string {
+  return DRAFT_KEY_PREFIX + draftId
 }
 
-export function loadDraft(storage: Storage, noteId: string | null): NoteDraft | null {
-  const parsed = readJson(storage, draftKey(noteId))
+export function loadDraft(storage: Storage, draftId: string): NoteDraft | null {
+  const parsed = readJson(storage, draftKey(draftId))
   if (!parsed) return null
   const data = migrate(parsed)
   if (
@@ -182,12 +195,12 @@ export function loadDraft(storage: Storage, noteId: string | null): NoteDraft | 
   return data as unknown as NoteDraft
 }
 
-export function saveDraft(storage: Storage, draft: Omit<NoteDraft, 'version'>): boolean {
-  return writeJson(storage, draftKey(draft.noteId), { version: SCHEMA_VERSION, ...draft })
+export function saveDraft(storage: Storage, draftId: string, draft: Omit<NoteDraft, 'version'>): boolean {
+  return writeJson(storage, draftKey(draftId), { version: SCHEMA_VERSION, ...draft })
 }
 
-export function removeDraft(storage: Storage, noteId: string | null): void {
-  storage.removeItem(draftKey(noteId))
+export function removeDraft(storage: Storage, draftId: string): void {
+  storage.removeItem(draftKey(draftId))
 }
 
 export function listDraftIds(storage: Storage): string[] {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { getStorage, listDraftIds, NEW_NOTE_DRAFT_ID, NoteCard, useNotesStore, type Note } from '~/entities/note'
+import { getStorage, listDraftIds, loadDraft, NEW_NOTE_DRAFT_PREFIX, NoteCard, useNotesStore, type Note } from '~/entities/note'
 import { useDialog } from '~/features/confirm-dialog'
 import { plural, useToast } from '~/shared/lib'
 import { AppBanner, BaseButton, EmptyState } from '~/shared/ui'
@@ -11,10 +11,18 @@ const { confirm } = useDialog()
 const toast = useToast()
 
 const draftIds = ref(new Set<string>())
+/** Sessions of unsaved new notes, the most recent first. */
+const newNoteSessions = ref<string[]>([])
 
 function refreshDrafts() {
   const storage = getStorage()
-  draftIds.value = new Set(storage ? listDraftIds(storage) : [])
+  const ids = storage ? listDraftIds(storage) : []
+  draftIds.value = new Set(ids)
+  newNoteSessions.value = ids
+    .filter(id => id.startsWith(NEW_NOTE_DRAFT_PREFIX))
+    .map(id => ({ id, savedAt: (storage && loadDraft(storage, id)?.savedAt) || 0 }))
+    .sort((a, b) => b.savedAt - a.savedAt)
+    .map(draft => draft.id.slice(NEW_NOTE_DRAFT_PREFIX.length))
 }
 
 onMounted(() => {
@@ -35,7 +43,12 @@ const storageIssueText = computed(() => {
   return `${reason} ${backup}`
 })
 
-const hasNewDraft = computed(() => draftIds.value.has(NEW_NOTE_DRAFT_ID))
+const newDraftText = computed(() => {
+  const count = newNoteSessions.value.length
+  if (count === 0) return null
+  if (count === 1) return 'У вас есть несохранённая новая заметка.'
+  return `У вас ${count} ${plural(count, ['несохранённая новая заметка', 'несохранённые новые заметки', 'несохранённых новых заметок'])}.`
+})
 
 async function onDelete(note: Note) {
   const confirmed = await confirm({
@@ -80,10 +93,10 @@ async function onDelete(note: Note) {
       Не удалось сохранить изменения: хранилище браузера недоступно или переполнено.
     </AppBanner>
 
-    <AppBanner v-if="hasNewDraft" variant="info" class="home__banner">
-      У вас есть несохранённая новая заметка.
+    <AppBanner v-if="newDraftText" variant="info" class="home__banner">
+      {{ newDraftText }}
       <template #actions>
-        <BaseButton to="/notes/new" size="sm">
+        <BaseButton :to="`/notes/new?draft=${newNoteSessions[0]}`" size="sm">
           Продолжить
         </BaseButton>
       </template>

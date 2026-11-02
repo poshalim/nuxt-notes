@@ -59,11 +59,11 @@ describe('storage', () => {
       history: { past: [], future: [] },
       savedAt: 3,
     }
-    saveDraft(localStorage, draft)
-    saveDraft(localStorage, { ...draft, noteId: null, baseUpdatedAt: null })
+    saveDraft(localStorage, 'n1', draft)
+    saveDraft(localStorage, 'new:tab', { ...draft, noteId: null, baseUpdatedAt: null })
 
     expect(loadDraft(localStorage, 'n1')).toEqual({ version: SCHEMA_VERSION, ...draft })
-    expect(listDraftIds(localStorage).sort()).toEqual(['n1', 'new'])
+    expect(listDraftIds(localStorage).sort()).toEqual(['n1', 'new:tab'])
 
     removeDraft(localStorage, 'n1')
     expect(loadDraft(localStorage, 'n1')).toBeNull()

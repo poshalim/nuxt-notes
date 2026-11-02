@@ -5,10 +5,13 @@ import {
   cloneContent,
   contentEquals,
   emptyContent,
+  getSessionStorage,
   getStorage,
   invertOp,
   isContentEmpty,
   loadDraft,
+  NEW_NOTE_DRAFT_PREFIX,
+  NEW_NOTE_SESSION_KEY,
   normalizeContent,
   removeDraft,
   saveDraft,
@@ -50,6 +53,8 @@ export const useEditorStore = defineStore('editor', () => {
   const history = reactive(createHistory<NoteOp>())
   const pending = ref<PendingText | null>(null)
   const active = ref(false)
+  /** Id of the tab's session of creating a new note; scopes its draft. */
+  const newNoteSession = ref<string | null>(null)
 
   let textTimer: ReturnType<typeof setTimeout> | null = null
   let draftTimer: ReturnType<typeof setTimeout> | null = null
@@ -95,6 +100,25 @@ export const useEditorStore = defineStore('editor', () => {
     return current.target.type === 'title'
       ? { type: 'title', from: current.from, to }
       : { type: 'text', id: current.target.id, from: current.from, to }
+  }
+
+  /** Storage id of the current draft, `null` when there is no edit session to keep. */
+  function currentDraftId(): string | null {
+    if (noteId.value !== null) return noteId.value
+    return newNoteSession.value === null ? null : NEW_NOTE_DRAFT_PREFIX + newNoteSession.value
+  }
+
+  /** sessionStorage is per tab and survives reloads: the tab gets its draft back and never shares it. */
+  function startNewNoteSession(requested?: string): void {
+    const session = getSessionStorage()
+    const id = requested ?? session?.getItem(NEW_NOTE_SESSION_KEY) ?? createId()
+    session?.setItem(NEW_NOTE_SESSION_KEY, id)
+    newNoteSession.value = id
+  }
+
+  function endNewNoteSession(): void {
+    newNoteSession.value = null
+    getSessionStorage()?.removeItem(NEW_NOTE_SESSION_KEY)
   }
 
   function scheduleDraftSave(): void {
@@ -186,6 +210,7 @@ export const useEditorStore = defineStore('editor', () => {
     textTimer = clearTimer(textTimer)
     draftTimer = clearTimer(draftTimer)
     noteId.value = id
+    if (id !== null) newNoteSession.value = null
     baseUpdatedAt.value = updatedAt
     base.value = cloneContent(source)
     content.value = cloneContent(source)
@@ -193,10 +218,14 @@ export const useEditorStore = defineStore('editor', () => {
     clearHistory(history)
   }
 
-  /** Starts an edit session of a stored note, or of a new note when `id` is `null`. */
-  function open(id: string | null): OpenResult {
+  /**
+   * Starts an edit session of a stored note, or of a new note when `id` is `null`.
+   * `draft` continues the new-note session with this id (e.g. one left by a closed tab).
+   */
+  function open(id: string | null, options: { draft?: string } = {}): OpenResult {
     if (id === null) {
       reset(null, emptyContent(), null)
+      startNewNoteSession(options.draft)
       active.value = true
       return 'ok'
     }
@@ -214,14 +243,16 @@ export const useEditorStore = defineStore('editor', () => {
   function close(): void {
     flushDraft()
     reset(null, emptyContent(), null)
+    newNoteSession.value = null
     active.value = false
   }
 
   /** A draft of an unsaved edit of the current note left by a previous page session, if it has changes. */
   function findDraft(): NoteDraft | null {
     const storage = getStorage()
-    if (!storage) return null
-    const draft = loadDraft(storage, noteId.value)
+    const draftId = currentDraftId()
+    if (!storage || draftId === null) return null
+    const draft = loadDraft(storage, draftId)
     if (!draft || contentEquals(draft.content, base.value)) return null
     return draft
   }
@@ -238,7 +269,8 @@ export const useEditorStore = defineStore('editor', () => {
   function discardDraft(): void {
     draftTimer = clearTimer(draftTimer)
     const storage = getStorage()
-    if (storage) removeDraft(storage, noteId.value)
+    const draftId = currentDraftId()
+    if (storage && draftId !== null) removeDraft(storage, draftId)
   }
 
   /** Writes the current unsaved edit to storage, so it survives a page reload. */
@@ -246,14 +278,15 @@ export const useEditorStore = defineStore('editor', () => {
     draftTimer = clearTimer(draftTimer)
     if (!active.value) return
     const storage = getStorage()
-    if (!storage) return
+    const draftId = currentDraftId()
+    if (!storage || draftId === null) return
     // A draft of a note deleted elsewhere would be orphaned: nothing could offer to restore it.
     if (!isDirty.value || isRemovedExternally.value) {
-      removeDraft(storage, noteId.value)
+      removeDraft(storage, draftId)
       return
     }
     const op = pendingOp()
-    saveDraft(storage, {
+    saveDraft(storage, draftId, {
       noteId: noteId.value,
       baseUpdatedAt: baseUpdatedAt.value,
       content: cloneContent(content.value),
@@ -290,6 +323,7 @@ export const useEditorStore = defineStore('editor', () => {
     }
 
     discardDraft()
+    if (noteId.value === null) endNewNoteSession()
     reset(savedId, normalized, updatedAt)
     return { status: 'saved', id: savedId }
   }
@@ -297,6 +331,7 @@ export const useEditorStore = defineStore('editor', () => {
   /** Drops unsaved changes and history of the current edit session. */
   function cancel(): void {
     discardDraft()
+    if (noteId.value === null) endNewNoteSession()
     reset(noteId.value, base.value, baseUpdatedAt.value)
   }
 
