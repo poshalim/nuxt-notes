@@ -15,7 +15,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  checks:
+    uses: ./.github/workflows/ci.yml
+
   build:
+    needs: checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,8 +28,6 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run lint
-      - run: npm test
       - run: npm run generate
         env:
           NUXT_APP_BASE_URL: /${{ github.event.repository.name }}/
