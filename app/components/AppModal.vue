@@ -99,6 +99,7 @@ onBeforeUnmount(() => {
     gap: 12px;
     width: 100%;
     max-width: 460px;
+    max-height: calc(100vh - 32px);
     max-height: calc(100dvh - 32px);
     overflow: auto;
     padding: 24px;

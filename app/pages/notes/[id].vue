@@ -406,6 +406,7 @@ onBeforeUnmount(() => {
     margin: -8px -8px 0;
     padding: 8px;
     border-radius: $radius-lg;
+    background: var(--c-bg);
     background: color-mix(in srgb, var(--c-bg) 88%, transparent);
     backdrop-filter: blur(8px);
   }
