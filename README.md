@@ -22,24 +22,36 @@ npm run lint
 
 Nuxt 4 (`ssr: false`), Vue 3 Composition API, TypeScript strict, Pinia, SCSS, Vitest. UI-библиотек нет. Docker: `nuxt generate` → nginx со SPA-fallback.
 
-## Структура
+## Структура (Feature-Sliced Design)
 
 ```
 app/
-  lib/            чистая логика без Vue: типы, история, операции, хранилище
-  stores/         notes (заметки и персистентность), editor (сессия редактирования)
-  composables/    useDialog, useFocusTrap, useUndoHotkeys, useToast
-  components/     переиспользуемые компоненты: AppModal, DialogHost, BaseButton, BaseCheckbox, NoteCard, TodoItemRow…
-  pages/          index.vue, notes/[id].vue (id = "new" для новой заметки)
-tests/            unit-тесты истории, операций, хранилища и сторов
+  app.vue, layouts/, plugins/, error.vue, assets/   слой app: инициализация, глобальные стили
+  pages/                     слой pages: роутинг Nuxt, тонкие обёртки над виджетами
+  widgets/
+    notes-list/              список заметок с удалением
+    note-editor/             экран редактирования: тулбар, диалоги, хоткеи
+  features/
+    edit-note/               сессия редактирования (store, история, черновики), TodoItemRow
+    confirm-dialog/          promise-based модальные подтверждения (useDialog + DialogHost)
+  entities/
+    note/                    модель, операции-дельты, хранилище с версией схемы, notes store, NoteCard
+  shared/
+    lib/                     стек истории, id, форматирование, focus-trap, тосты, undo-хоткеи
+    ui/                      ui-kit: AppModal, BaseButton, BaseCheckbox, AppIcon…
 ```
+
+- Каждый слайс отдаёт наружу только `index.ts`. Внутри слайса импорты относительные.
+- Слой импортирует только нижележащие слои: `widgets → features → entities → shared`. Фичи друг друга не импортируют. Правила проверяет ESLint (`no-restricted-imports` в `eslint.config.mjs`).
+- Автоимпорт кода проекта отключён (`components.dirs: []`, `imports.scan: false`), зависимости видны явно. Автоимпорт API Vue/Nuxt (`ref`, `useRoute`…) оставлен.
+- Тесты лежат рядом с модулем (`*.test.ts`).
 
 ## Ключевые решения
 
 ### История изменений
 
-- В истории лежат не копии заметки, а обратимые операции с дельтой (`app/lib/ops.ts`): `title`, `text`, `toggle`, `add`, `remove`. Undo применяет инверсию операции, redo применяет её саму. В `remove` хранится только удалённый пункт, чтобы восстановить его на том же месте.
-- Стеки `past`/`future` реализованы в `app/lib/history.ts`. Лимит 50 записей, самые старые вытесняются. Новое изменение очищает redo-ветку.
+- В истории лежат не копии заметки, а обратимые операции с дельтой (`app/entities/note/model/ops.ts`): `title`, `text`, `toggle`, `add`, `remove`. Undo применяет инверсию операции, redo применяет её саму. В `remove` хранится только удалённый пункт, чтобы восстановить его на том же месте.
+- Стеки `past`/`future` реализованы в `app/shared/lib/history.ts`. Лимит 50 записей, самые старые вытесняются. Новое изменение очищает redo-ветку.
 - Непрерывный ввод в одно поле даёт одну запись. Запись фиксируется по `blur`, после паузы 600 мс или при переходе к другому полю. Toggle, add и remove фиксируют незакрытый ввод и записываются отдельными атомарными шагами.
 - История живёт в рамках сессии редактирования: «Сохранить» и «Отмена» её сбрасывают.
 
@@ -49,7 +61,7 @@ tests/            unit-тесты истории, операций, хранил
 
 ### Хранилище
 
-- `localStorage`, данные лежат в конверте `{ version, notes }`. В `app/lib/storage.ts` есть место для цепочки миграций. Повреждённые или невалидные данные игнорируются, приложение не падает.
+- `localStorage`, данные лежат в конверте `{ version, notes }`. В `app/entities/note/api/storage.ts` есть место для цепочки миграций. Повреждённые или невалидные данные игнорируются, приложение не падает.
 - Запись идёт не на каждое изменение. Заметки сохраняются в хранилище с debounce (300 мс) и принудительно на `pagehide`/`visibilitychange`. Черновик редактирования пишется с debounce 500 мс.
 - Перед записью стор перечитывает хранилище и накладывает только свои изменения, поэтому записи разных вкладок не затирают друг друга.
 
