@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { AppModal, BaseButton } from '~/shared/ui'
 import { useDialog } from '../model/useDialog'
 const { current, resolveCurrent } = useDialog()

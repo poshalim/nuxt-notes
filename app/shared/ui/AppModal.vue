@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { onBeforeUnmount, ref, toRef, useId, watch } from 'vue'
 import { useFocusTrap } from '../lib'
 import AppIcon from './AppIcon.vue'
 const props = withDefaults(defineProps<{

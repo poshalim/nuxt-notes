@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { RouteLocationRaw } from 'vue-router'
 import AppIcon, { type IconName } from './AppIcon.vue'
 

@@ -1,12 +1,15 @@
+import { defineNuxtConfig } from 'nuxt/config'
+
 export default defineNuxtConfig({
   compatibilityDate: '2026-11-01',
   ssr: false,
   devtools: { enabled: false },
   modules: ['@pinia/nuxt', '@nuxt/eslint'],
   css: ['~/assets/scss/main.scss'],
-  // FSD: project code is imported explicitly through slice public APIs.
+  // Everything is imported explicitly: project code through slice public APIs,
+  // Vue APIs from 'vue', Nuxt composables from '#imports'.
   components: { dirs: [] },
-  imports: { scan: false },
+  imports: { scan: false, autoImport: false },
   typescript: {
     strict: true,
     typeCheck: false,

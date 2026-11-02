@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import type { TodoItem } from '~/entities/note'
 import { BaseButton, BaseCheckbox } from '~/shared/ui'
 

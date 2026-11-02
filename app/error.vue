@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import { clearError, useHead } from '#imports'
 import { BaseButton, EmptyState } from '~/shared/ui'
 import type { NuxtError } from '#app'
 

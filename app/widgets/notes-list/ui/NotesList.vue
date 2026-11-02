@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useHead } from '#imports'
 import { getStorage, listDraftIds, loadDraft, NEW_NOTE_DRAFT_PREFIX, NoteCard, useNotesStore, type Note } from '~/entities/note'
 import { useDialog } from '~/features/confirm-dialog'
 import { plural, useToast } from '~/shared/lib'

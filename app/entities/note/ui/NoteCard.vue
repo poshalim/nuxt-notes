@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { formatDate, plural } from '~/shared/lib'
 import { BaseButton, BaseCheckbox } from '~/shared/ui'
 import type { Note } from '../model/types'
