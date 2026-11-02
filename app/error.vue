@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { BaseButton, EmptyState } from '~/shared/ui'
 import type { NuxtError } from '#app'
 
 const props = defineProps<{ error: NuxtError }>()

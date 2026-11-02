@@ -1,3 +1,7 @@
+<script setup lang="ts">
+import { AppIcon } from '~/shared/ui'
+</script>
+
 <template>
   <div class="layout">
     <a class="layout__skip" href="#main">Перейти к содержимому</a>

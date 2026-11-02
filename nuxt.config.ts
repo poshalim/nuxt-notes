@@ -4,6 +4,9 @@ export default defineNuxtConfig({
   devtools: { enabled: false },
   modules: ['@pinia/nuxt', '@nuxt/eslint'],
   css: ['~/assets/scss/main.scss'],
+  // FSD: project code is imported explicitly through slice public APIs.
+  components: { dirs: [] },
+  imports: { scan: false },
   typescript: {
     strict: true,
     typeCheck: false,
