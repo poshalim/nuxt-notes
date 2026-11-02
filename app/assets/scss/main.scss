@@ -1,0 +1,135 @@
+:root {
+  color-scheme: light;
+  --c-bg: #f4f5f9;
+  --c-surface: #ffffff;
+  --c-surface-muted: #f0f1f6;
+  --c-border: #e1e3ec;
+  --c-border-strong: #c9ccd9;
+  --c-text: #1d2033;
+  --c-text-muted: #6b6f85;
+  --c-primary: #4f5bd5;
+  --c-primary-hover: #3f4ac2;
+  --c-primary-soft: #eceefe;
+  --c-on-primary: #ffffff;
+  --c-danger: #d6455d;
+  --c-danger-hover: #bf3249;
+  --c-danger-soft: #fdecef;
+  --c-warning-soft: #fff6e0;
+  --c-warning-border: #f3d48a;
+  --c-success: #2f9e6e;
+  --c-focus: #7c86f0;
+  --c-backdrop: rgb(20 22 40 / 45%);
+  --shadow-sm: 0 1px 2px rgb(20 22 40 / 6%);
+  --shadow: 0 4px 16px rgb(20 22 40 / 8%);
+  --shadow-lg: 0 18px 48px rgb(20 22 40 / 22%);
+  --font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --c-bg: #14151d;
+    --c-surface: #1d1f2a;
+    --c-surface-muted: #262836;
+    --c-border: #2f3242;
+    --c-border-strong: #424659;
+    --c-text: #e8e9f1;
+    --c-text-muted: #9a9db3;
+    --c-primary: #7480f2;
+    --c-primary-hover: #8993f5;
+    --c-primary-soft: #272b4d;
+    --c-on-primary: #0f1020;
+    --c-danger: #f06b81;
+    --c-danger-hover: #f4889a;
+    --c-danger-soft: #3a1f27;
+    --c-warning-soft: #352d17;
+    --c-warning-border: #6b5622;
+    --c-success: #4cc28f;
+    --c-focus: #9aa2f7;
+    --c-backdrop: rgb(0 0 0 / 60%);
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 30%);
+    --shadow: 0 4px 16px rgb(0 0 0 / 30%);
+    --shadow-lg: 0 18px 48px rgb(0 0 0 / 50%);
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--c-text);
+  background: var(--c-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+p,
+ul,
+ol {
+  margin: 0;
+}
+
+ul,
+ol {
+  padding: 0;
+  list-style: none;
+}
+
+a {
+  color: inherit;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+:focus-visible {
+  @include focus-ring;
+}
+
+.visually-hidden {
+  @include visually-hidden;
+}
+
+.container {
+  width: 100%;
+  max-width: $container-width;
+  margin: 0 auto;
+  padding: 0 16px;
+
+  @include up(sm) {
+    padding: 0 24px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
